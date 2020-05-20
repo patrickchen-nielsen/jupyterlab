@@ -276,6 +276,22 @@ namespace Private {
     };
   }
 
+  // borrowed from nbresuse nbextension
+  function metric(metric_name: string, text: string) {
+    var regex = new RegExp('^' + metric_name + '{?([^ }]*)}? (.*)$', 'gm');
+    var matches = [];
+    var match;
+
+    do {
+      match = regex.exec(text);
+      if (match) {
+        matches.push(match);
+      }
+    } while (match);
+
+    if (matches.length > 0) return matches[0];
+    return null;
+  }
   /**
    * Make a request to the backend.
    */
@@ -289,10 +305,29 @@ namespace Private {
 
     if (response.ok) {
       try {
-        return await response.json();
+        var resp = await response;
       } catch (error) {
         throw error;
       }
+
+      var prometheus_text = resp.text();
+      var metrics = prometheus_text.then(function(data) {
+        let total_memory_array = metric('total_memory_usage', data);
+        let total_memory_value =
+          total_memory_array === null ? 0 : parseFloat(total_memory_array[2]);
+        let max_memory_array = metric('max_memory_usage', data);
+        let max_memory_value =
+          max_memory_array === null ? 0 : parseFloat(max_memory_array[2]);
+        return {
+          rss: total_memory_value,
+          limits: {
+            memory: {
+              rss: max_memory_value
+            }
+          }
+        };
+      });
+      return metrics;
     }
 
     return null;
